@@ -5,10 +5,12 @@ public class PlasticBottle {
 	private int ounces;
 	private boolean refundable;
 	private String type;
-	public PlasticBottle(int ounces, boolean refundable, String type) {
+	private String drinktype;
+	public PlasticBottle(int ounces, boolean refundable, String type, String drinktype) {
 		this.refundable = refundable;
 		this.type = type;
 		this.ounces = ounces;
+		this.drinktype = drinktype;
 	}
 	
 	public boolean isRefundable() {
