@@ -1,12 +1,12 @@
 package com.recycleproj;
 
 public class PVC extends PlasticBottle {
-	private final double plasticcostperoz = 0.48/16;
-	public PVC(int ounces, boolean refundable, String type) {
-		super(ounces, refundable, type);
-		// TODO Auto-generated constructor stub
+	public PVC(int ounces, boolean refundable) {
+		super(ounces, refundable);
 	}
-	public double getCostDryOZ() {
-		return this.plasticcostperoz;
+
+	@Override
+	public Material getMaterial() {
+		return Material.PVC;
 	}
 }

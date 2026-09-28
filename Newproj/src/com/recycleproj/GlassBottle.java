@@ -1,12 +1,19 @@
 package com.recycleproj;
 
 public class GlassBottle extends Bottle {
-	private final double costdryoz = 0.0063;
+	private final String color;
+
 	public GlassBottle(int ounces, boolean refundable, String color) {
-		super(ounces, refundable, color);
-		// TODO Auto-generated constructor stub
+		super(ounces, refundable);
+		this.color = color;
 	}
-	public double getPerOZCostDry() {
-		return this.costdryoz;
+
+	public String getColor() {
+		return this.color;
+	}
+
+	@Override
+	public Material getMaterial() {
+		return Material.GLASS;
 	}
 }

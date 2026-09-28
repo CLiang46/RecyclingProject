@@ -1,10 +1,201 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Recycling Buyback Calculator</title>
+<style>
+	:root { --green: #2e7d32; --light: #e8f5e9; --border: #c8d6c9; }
+	* { box-sizing: border-box; }
+	body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f6f8f6; color: #1d2b1f; }
+	header { background: var(--green); color: #fff; padding: 1.25rem 1.5rem; }
+	header h1 { margin: 0; font-size: 1.5rem; }
+	header p { margin: .35rem 0 0; opacity: .9; }
+	main { max-width: 960px; margin: 1.5rem auto; padding: 0 1rem; }
+	section { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+	h2 { margin-top: 0; font-size: 1.15rem; }
+	table { width: 100%; border-collapse: collapse; }
+	th, td { padding: .45rem .5rem; border-bottom: 1px solid #e3e9e3; text-align: right; }
+	th:first-child, td:first-child { text-align: left; }
+	thead th { background: var(--light); font-weight: 600; font-size: .9rem; }
+	input[type=number] { width: 6.5rem; padding: .3rem .4rem; border: 1px solid var(--border); border-radius: 4px; text-align: right; }
+	input:invalid { border-color: #c62828; }
+	.hint { color: #5b6b5d; font-size: .85rem; }
+	.actions { display: flex; gap: .75rem; margin-top: 1rem; }
+	button { padding: .55rem 1.1rem; border-radius: 6px; border: 1px solid var(--green); background: var(--green); color: #fff; font-size: 1rem; cursor: pointer; }
+	button.secondary { background: #fff; color: var(--green); }
+	.total { font-size: 1.6rem; font-weight: 700; color: var(--green); }
+	.error { color: #c62828; font-weight: 600; }
+	.tag { display: inline-block; padding: .05rem .45rem; border-radius: 999px; font-size: .8rem; background: var(--light); }
+	.tag.weight { background: #fff3e0; }
+	tfoot td { font-weight: 700; border-bottom: none; }
+	.scroll { overflow-x: auto; }
+</style>
 </head>
 <body>
+<header>
+	<h1>Recycling Buyback Calculator</h1>
+	<p>Estimate how much you can earn recycling CRV cans and bottles.</p>
+</header>
+<main>
+	<section>
+		<h2>Your containers</h2>
+		<p class="hint" id="rules">Loading rates&hellip;</p>
+		<form id="form" novalidate>
+			<div class="scroll">
+				<table>
+					<thead>
+						<tr>
+							<th>Material</th>
+							<th>Regular<br><span class="hint">under 24 oz</span></th>
+							<th>Large<br><span class="hint">24 oz or more</span></th>
+							<th>Non-CRV<br><span class="hint">no refund</span></th>
+							<th>Actual weight (lb)<br><span class="hint">optional</span></th>
+						</tr>
+					</thead>
+					<tbody id="inputs"></tbody>
+				</table>
+			</div>
+			<div class="actions">
+				<button type="submit">Calculate</button>
+				<button type="reset" class="secondary">Clear</button>
+			</div>
+		</form>
+	</section>
 
+	<section id="output" hidden>
+		<h2>Estimated payout: <span class="total" id="total">$0.00</span></h2>
+		<div class="scroll">
+			<table>
+				<thead>
+					<tr>
+						<th>Material</th>
+						<th>Refundable</th>
+						<th>Weight (lb)</th>
+						<th>By count</th>
+						<th>By weight</th>
+						<th>Paid by</th>
+						<th>Payout</th>
+					</tr>
+				</thead>
+				<tbody id="results"></tbody>
+				<tfoot><tr><td colspan="6">Total</td><td id="footTotal">$0.00</td></tr></tfoot>
+			</table>
+		</div>
+		<p class="hint">Weights marked with * are estimated from typical empty-container weights. Enter an actual weight for a more accurate by-weight value.</p>
+	</section>
+	<p class="error" id="error" role="alert"></p>
+</main>
+
+<script>
+	const $ = id => document.getElementById(id);
+	const money = v => '$' + Number(v).toFixed(2);
+
+	function cell(content) {
+		const td = document.createElement('td');
+		if (content instanceof Node) td.appendChild(content); else td.textContent = content;
+		return td;
+	}
+
+	function numberInput(name, step, label) {
+		const input = document.createElement('input');
+		input.type = 'number';
+		input.min = '0';
+		input.step = step;
+		input.name = name;
+		input.placeholder = '0';
+		input.setAttribute('aria-label', label);
+		return input;
+	}
+
+	async function loadMaterials() {
+		const res = await fetch('/api/materials');
+		if (!res.ok) throw new Error('Could not load materials (' + res.status + ')');
+		const data = await res.json();
+		$('rules').textContent =
+			'Refundable containers earn ' + money(data.regularCrv) + ' each (under ' + data.largeContainerOz + ' oz) or ' +
+			money(data.largeCrv) + ' each (' + data.largeContainerOz + ' oz or more). Materials with more than ' +
+			data.countLimit + ' refundable containers are paid by weight instead.';
+		const body = $('inputs');
+		for (const m of data.materials) {
+			const tr = document.createElement('tr');
+			const name = document.createElement('span');
+			name.textContent = m.name;
+			const rate = document.createElement('div');
+			rate.className = 'hint';
+			rate.textContent = money(m.perPoundRate) + ' / lb by weight';
+			const first = cell(name);
+			first.appendChild(rate);
+			tr.appendChild(first);
+			tr.appendChild(cell(numberInput(m.key + '_regular', '1', m.name + ' regular count')));
+			tr.appendChild(cell(numberInput(m.key + '_large', '1', m.name + ' large count')));
+			tr.appendChild(cell(numberInput(m.key + '_nonrefundable', '1', m.name + ' non-CRV count')));
+			tr.appendChild(cell(numberInput(m.key + '_weight', '0.01', m.name + ' actual weight in pounds')));
+			body.appendChild(tr);
+		}
+	}
+
+	function showResults(data) {
+		const body = $('results');
+		body.replaceChildren();
+		for (const r of data.results) {
+			const tr = document.createElement('tr');
+			tr.appendChild(cell(r.name));
+			let count = String(r.regularCount + r.largeCount);
+			if (r.nonRefundableCount > 0) count += ' (+' + r.nonRefundableCount + ' non-CRV)';
+			tr.appendChild(cell(count));
+			tr.appendChild(cell(Number(r.weightPounds).toFixed(2) + (r.weightEstimated ? '*' : '')));
+			tr.appendChild(cell(money(r.countValue)));
+			tr.appendChild(cell(money(r.weightValue)));
+			const tag = document.createElement('span');
+			tag.className = 'tag' + (r.method === 'weight' ? ' weight' : '');
+			tag.textContent = r.method;
+			tr.appendChild(cell(tag));
+			tr.appendChild(cell(money(r.payout)));
+			body.appendChild(tr);
+		}
+		if (data.results.length === 0) {
+			const tr = document.createElement('tr');
+			const td = cell('Enter some containers above to see your payout.');
+			td.colSpan = 7;
+			tr.appendChild(td);
+			body.appendChild(tr);
+		}
+		$('total').textContent = money(data.total);
+		$('footTotal').textContent = money(data.total);
+		$('output').hidden = false;
+	}
+
+	$('form').addEventListener('submit', async event => {
+		event.preventDefault();
+		$('error').textContent = '';
+		const form = event.target;
+		if (!form.checkValidity()) {
+			$('error').textContent = 'Please enter non-negative numbers (whole numbers for counts).';
+			return;
+		}
+		const params = new URLSearchParams();
+		for (const [k, v] of new FormData(form)) if (String(v).trim() !== '') params.append(k, v);
+		try {
+			const res = await fetch('/api/calculate', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: params
+			});
+			const data = await res.json();
+			if (!res.ok) throw new Error(data.error || 'Request failed');
+			showResults(data);
+		} catch (e) {
+			$('error').textContent = e.message;
+		}
+	});
+
+	$('form').addEventListener('reset', () => {
+		$('output').hidden = true;
+		$('error').textContent = '';
+	});
+
+	loadMaterials().catch(e => { $('error').textContent = e.message; });
+</script>
 </body>
 </html>
