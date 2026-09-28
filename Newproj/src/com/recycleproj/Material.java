@@ -7,7 +7,9 @@ package com.recycleproj;
 public enum Material {
 	ALUMINUM("aluminum", "Aluminum cans", 0.104, 0.5, 1.0),
 	BIMETAL("bimetal", "Bimetal cans", 0.027, 1.5, 3.0),
-	GLASS("glass", "Glass bottles", 0.0063, 7.0, 17.0),
+	GLASS_CLEAR("glass_clear", "Glass bottles, clear", 0.0063, 7.0, 17.0),
+	GLASS_GREEN("glass_green", "Glass bottles, green", 0.0063, 7.0, 17.0),
+	GLASS_BROWN("glass_brown", "Glass bottles, brown/dark", 0.0063, 7.0, 17.0),
 	PET("pet", "#1 PET plastic", 0.09, 0.35, 1.6),
 	HDPE("hdpe", "#2 HDPE plastic", 0.67 / 16, 1.0, 2.2),
 	PVC("pvc", "#3 PVC plastic", 0.48 / 16, 0.8, 1.8),
@@ -64,7 +66,9 @@ public enum Material {
 		switch (this) {
 		case ALUMINUM: return new AluminumCan(ounces, refundable);
 		case BIMETAL: return new BimetalCan(ounces, refundable);
-		case GLASS: return new GlassBottle(ounces, refundable, "clear");
+		case GLASS_CLEAR: return new GlassBottle(ounces, refundable, GlassBottle.CLEAR);
+		case GLASS_GREEN: return new GlassBottle(ounces, refundable, GlassBottle.GREEN);
+		case GLASS_BROWN: return new GlassBottle(ounces, refundable, GlassBottle.BROWN);
 		case PET: return new PETBottle(ounces, refundable);
 		case HDPE: return new HDPE(ounces, refundable);
 		case PVC: return new PVC(ounces, refundable);

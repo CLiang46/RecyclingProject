@@ -10,6 +10,8 @@ It's a plain Java backend (no frameworks, no build tool) serving a small web pag
   A group of **50 or fewer** refundable containers is paid **by count**. A larger group is paid **by weight** at that
   material's per-pound rate, like California recycling centers do. For example, 40 regular and 60 large PET bottles
   means the regular ones are paid by count and the large ones by weight.
+- **Glass colors:** clear, green and brown/dark glass are sorted and treated as separate materials, so each color
+  (and each size within it) has its own count limit and weight.
 - **Weight:** enter the actual weight (in pounds) of each group if you've weighed it. Otherwise the calculator estimates it
   from typical empty-container weights. A group with a weight but no count is paid by weight.
 - The results show both the by-count and by-weight values, so you can see which way the rules apply.
@@ -43,7 +45,7 @@ Run the tests with `./run.sh test` or `.\run.ps1 test`.
 | `GET` or `POST /api/calculate` | Payout for a load |
 
 `/api/calculate` takes query-string or form-encoded parameters for each material key
-(`aluminum`, `bimetal`, `glass`, `pet`, `hdpe`, `pvc`, `ldpe`, `pp`, `ps`, `other`):
+(`aluminum`, `bimetal`, `glass_clear`, `glass_green`, `glass_brown`, `pet`, `hdpe`, `pvc`, `ldpe`, `pp`, `ps`, `other`):
 `{key}_regular`, `{key}_large`, `{key}_nonrefundable` (counts) and `{key}_regular_weight`, `{key}_large_weight`
 (pounds, optional). The response has one result per material and size group.
 

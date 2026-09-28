@@ -12,6 +12,7 @@ public class BuybackCalculatorTest {
 		containerSizesDetermineCrv();
 		nonRefundableContainersEarnNothing();
 		glassBottleUsesItsOwnRate();
+		glassColorsAreCountedSeparately();
 		smallLoadsArePaidByCount();
 		countLimitAppliesPerSizeGroup();
 		loadsOverFiftyArePaidByWeight();
@@ -44,6 +45,23 @@ public class BuybackCalculatorTest {
 	static void glassBottleUsesItsOwnRate() {
 		assertClose("glass per-oz rate", 0.0063, new GlassBottle(12, true, "green").getPerOzRate());
 		assertEquals("glass color", "green", new GlassBottle(12, true, "green").getColor());
+		assertEquals("clear material", Material.GLASS_CLEAR, new GlassBottle(12, true, "Clear").getMaterial());
+		assertEquals("green material", Material.GLASS_GREEN, new GlassBottle(12, true, "green").getMaterial());
+		assertEquals("dark is brown", Material.GLASS_BROWN, new GlassBottle(12, true, "dark").getMaterial());
+		expectThrows("unknown glass color", () -> new GlassBottle(12, true, "purple"));
+	}
+
+	static void glassColorsAreCountedSeparately() {
+		BuybackCalculator calc = new BuybackCalculator();
+		calc.add(new GlassBottle(12, true, "clear"), 40);
+		calc.add(new GlassBottle(12, true, "green"), 40);
+		calc.add(new GlassBottle(12, true, "brown"), 60);
+		List<BuybackCalculator.MaterialResult> results = calc.calculate();
+		assertEquals("three glass groups", 3, results.size());
+		assertEquals("clear by count", false, results.get(0).paidByWeight);
+		assertEquals("green by count", false, results.get(1).paidByWeight);
+		assertEquals("brown by weight", true, results.get(2).paidByWeight);
+		assertClose("glass total", 80 * 0.05 + 60 * 7.0 * 0.0063, calc.total());
 	}
 
 	static void smallLoadsArePaidByCount() {
@@ -104,7 +122,7 @@ public class BuybackCalculatorTest {
 
 	static void weightWithoutCountIsPaidByWeight() {
 		BuybackCalculator calc = new BuybackCalculator();
-		calc.setActualWeightPounds(Material.GLASS, true, 10);
+		calc.setActualWeightPounds(Material.GLASS_GREEN, true, 10);
 		BuybackCalculator.MaterialResult r = calc.calculate().get(0);
 		assertEquals("weight-only group paid by weight", true, r.paidByWeight);
 		assertClose("weight-only payout", 10 * 16 * 0.0063, r.payout);
@@ -123,7 +141,7 @@ public class BuybackCalculatorTest {
 	}
 
 	static void webParamsAreParsedAndValidated() {
-		Map<String, String> p = WebServer.parseParams("aluminum_regular=10&pet_large=3&glass_regular_weight=&x%20y=a+b");
+		Map<String, String> p = WebServer.parseParams("aluminum_regular=10&pet_large=3&glass_clear_regular_weight=&x%20y=a+b");
 		assertEquals("decoded key", "a b", p.get("x y"));
 		BuybackCalculator calc = WebServer.calculate(p);
 		assertClose("web total", 10 * 0.05 + 3 * 0.10, calc.total());
