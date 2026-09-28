@@ -22,7 +22,8 @@ import java.util.Map;
  * GET  /                -> the calculator web page
  * GET  /api/materials   -> materials, rates and estimated container weights
  * GET|POST /api/calculate -> payout for a load; parameters per material key:
- *        {key}_regular, {key}_large, {key}_nonrefundable (counts), {key}_weight (pounds, optional)
+ *        {key}_regular, {key}_large, {key}_nonrefundable (counts),
+ *        {key}_regular_weight, {key}_large_weight (pounds, optional)
  */
 public class WebServer {
 	/** Representative fluid-ounce sizes used when the web form only supplies regular/large counts. */
@@ -139,21 +140,28 @@ public class WebServer {
 			calc.add(m.newContainer(REGULAR_SIZE_OZ, true), quantity(params, k + "_regular"));
 			calc.add(m.newContainer(LARGE_SIZE_OZ, true), quantity(params, k + "_large"));
 			calc.add(m.newContainer(REGULAR_SIZE_OZ, false), quantity(params, k + "_nonrefundable"));
-			String weight = params.get(k + "_weight");
-			if (weight != null && !weight.isBlank()) {
-				double pounds;
-				try {
-					pounds = Double.parseDouble(weight.trim());
-				} catch (NumberFormatException e) {
-					throw new IllegalArgumentException(k + "_weight must be a number");
-				}
-				if (!(pounds >= 0) || pounds > MAX_QUANTITY) {
-					throw new IllegalArgumentException(k + "_weight must be between 0 and " + MAX_QUANTITY);
-				}
-				calc.setActualWeightPounds(m, pounds);
-			}
+			applyWeight(calc, m, false, params, k + "_regular_weight");
+			applyWeight(calc, m, true, params, k + "_large_weight");
 		}
 		return calc;
+	}
+
+	private static void applyWeight(BuybackCalculator calc, Material m, boolean large, Map<String, String> params,
+			String name) {
+		String weight = params.get(name);
+		if (weight == null || weight.isBlank()) {
+			return;
+		}
+		double pounds;
+		try {
+			pounds = Double.parseDouble(weight.trim());
+		} catch (NumberFormatException e) {
+			throw new IllegalArgumentException(name + " must be a number");
+		}
+		if (!(pounds >= 0) || pounds > MAX_QUANTITY) {
+			throw new IllegalArgumentException(name + " must be between 0 and " + MAX_QUANTITY);
+		}
+		calc.setActualWeightPounds(m, large, pounds);
 	}
 
 	private static int quantity(Map<String, String> params, String name) {
@@ -184,8 +192,8 @@ public class WebServer {
 			}
 			sb.append("{\"key\":").append(quote(r.material.getKey()))
 					.append(",\"name\":").append(quote(r.material.getDisplayName()))
-					.append(",\"regularCount\":").append(r.regularCount)
-					.append(",\"largeCount\":").append(r.largeCount)
+					.append(",\"size\":").append(quote(r.large ? "large" : "regular"))
+					.append(",\"count\":").append(r.count)
 					.append(",\"nonRefundableCount\":").append(r.nonRefundableCount)
 					.append(",\"weightPounds\":").append(num(r.weightOz / 16, 3))
 					.append(",\"weightEstimated\":").append(r.weightEstimated)

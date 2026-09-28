@@ -13,8 +13,10 @@ public class BuybackCalculatorTest {
 		nonRefundableContainersEarnNothing();
 		glassBottleUsesItsOwnRate();
 		smallLoadsArePaidByCount();
+		countLimitAppliesPerSizeGroup();
 		loadsOverFiftyArePaidByWeight();
 		actualWeightOverridesEstimate();
+		weightWithoutCountIsPaidByWeight();
 		countLimitAppliesPerMaterial();
 		webParamsAreParsedAndValidated();
 		jsonOutputIsWellFormed();
@@ -48,9 +50,31 @@ public class BuybackCalculatorTest {
 		BuybackCalculator calc = new BuybackCalculator();
 		calc.add(new AluminumCan(12, true), 30);
 		calc.add(new AluminumCan(24, true), 20);
-		BuybackCalculator.MaterialResult r = calc.calculate().get(0);
-		assertEquals("50 cans paid by count", false, r.paidByWeight);
-		assertClose("50 cans payout", 30 * 0.05 + 20 * 0.10, r.payout);
+		List<BuybackCalculator.MaterialResult> results = calc.calculate();
+		assertEquals("regular and large are separate groups", 2, results.size());
+		assertEquals("regular group first", false, results.get(0).large);
+		assertEquals("regular count", 30, results.get(0).count);
+		assertEquals("large count", 20, results.get(1).count);
+		assertEquals("regular paid by count", false, results.get(0).paidByWeight);
+		assertEquals("large paid by count", false, results.get(1).paidByWeight);
+		assertClose("50 cans payout", 30 * 0.05 + 20 * 0.10, calc.total());
+	}
+
+	static void countLimitAppliesPerSizeGroup() {
+		BuybackCalculator calc = new BuybackCalculator();
+		calc.add(new PETBottle(16, true), 40);
+		calc.add(new PETBottle(68, true), 40);
+		List<BuybackCalculator.MaterialResult> results = calc.calculate();
+		assertEquals("40 regular PET by count", false, results.get(0).paidByWeight);
+		assertEquals("40 large PET by count", false, results.get(1).paidByWeight);
+		assertClose("80 PET split by size", 40 * 0.05 + 40 * 0.10, calc.total());
+
+		calc.add(new PETBottle(68, true), 20);
+		results = calc.calculate();
+		assertEquals("regular PET still by count", false, results.get(0).paidByWeight);
+		assertEquals("60 large PET by weight", true, results.get(1).paidByWeight);
+		assertClose("large PET estimated weight oz", 60 * 1.6, results.get(1).weightOz);
+		assertClose("mixed payout", 40 * 0.05 + 60 * 1.6 * 0.09, calc.total());
 	}
 
 	static void loadsOverFiftyArePaidByWeight() {
@@ -67,12 +91,23 @@ public class BuybackCalculatorTest {
 	static void actualWeightOverridesEstimate() {
 		BuybackCalculator calc = new BuybackCalculator();
 		calc.add(new AluminumCan(12, true), 100);
-		calc.setActualWeightPounds(Material.ALUMINUM, 3.5);
+		calc.add(new AluminumCan(24, true), 60);
+		calc.setActualWeightPounds(Material.ALUMINUM, false, 3.5);
+		calc.setActualWeightPounds(Material.ALUMINUM, true, 4);
+		List<BuybackCalculator.MaterialResult> results = calc.calculate();
+		assertEquals("regular weight measured", false, results.get(0).weightEstimated);
+		assertClose("regular measured payout", 3.5 * 16 * 0.104, results.get(0).payout);
+		assertClose("large measured payout", 4 * 16 * 0.104, results.get(1).payout);
+		expectThrows("negative weight", () -> calc.setActualWeightPounds(Material.ALUMINUM, false, -1));
+		expectThrows("NaN weight", () -> calc.setActualWeightPounds(Material.ALUMINUM, true, Double.NaN));
+	}
+
+	static void weightWithoutCountIsPaidByWeight() {
+		BuybackCalculator calc = new BuybackCalculator();
+		calc.setActualWeightPounds(Material.GLASS, true, 10);
 		BuybackCalculator.MaterialResult r = calc.calculate().get(0);
-		assertEquals("weight measured", false, r.weightEstimated);
-		assertClose("measured payout", 3.5 * 16 * 0.104, r.payout);
-		expectThrows("negative weight", () -> calc.setActualWeightPounds(Material.ALUMINUM, -1));
-		expectThrows("NaN weight", () -> calc.setActualWeightPounds(Material.ALUMINUM, Double.NaN));
+		assertEquals("weight-only group paid by weight", true, r.paidByWeight);
+		assertClose("weight-only payout", 10 * 16 * 0.0063, r.payout);
 	}
 
 	static void countLimitAppliesPerMaterial() {
@@ -88,20 +123,23 @@ public class BuybackCalculatorTest {
 	}
 
 	static void webParamsAreParsedAndValidated() {
-		Map<String, String> p = WebServer.parseParams("aluminum_regular=10&pet_large=3&glass_weight=&x%20y=a+b");
+		Map<String, String> p = WebServer.parseParams("aluminum_regular=10&pet_large=3&glass_regular_weight=&x%20y=a+b");
 		assertEquals("decoded key", "a b", p.get("x y"));
 		BuybackCalculator calc = WebServer.calculate(p);
 		assertClose("web total", 10 * 0.05 + 3 * 0.10, calc.total());
+		BuybackCalculator weighed = WebServer.calculate(WebServer.parseParams(
+				"pet_regular=80&pet_regular_weight=2&pet_large=80&pet_large_weight=5"));
+		assertClose("web weights per size", (2 + 5) * 16 * 0.09, weighed.total());
 		expectThrows("negative count", () -> WebServer.calculate(WebServer.parseParams("pet_regular=-1")));
 		expectThrows("decimal count", () -> WebServer.calculate(WebServer.parseParams("pet_regular=1.5")));
-		expectThrows("text weight", () -> WebServer.calculate(WebServer.parseParams("pet_weight=abc")));
+		expectThrows("text weight", () -> WebServer.calculate(WebServer.parseParams("pet_large_weight=abc")));
 		expectThrows("huge count", () -> WebServer.calculate(WebServer.parseParams("pet_regular=99999999")));
 	}
 
 	static void jsonOutputIsWellFormed() {
 		String json = WebServer.toJson(WebServer.calculate(WebServer.parseParams("aluminum_regular=2")));
-		assertEquals("json", "{\"results\":[{\"key\":\"aluminum\",\"name\":\"Aluminum cans\",\"regularCount\":2,"
-				+ "\"largeCount\":0,\"nonRefundableCount\":0,\"weightPounds\":0.063,\"weightEstimated\":true,"
+		assertEquals("json", "{\"results\":[{\"key\":\"aluminum\",\"name\":\"Aluminum cans\",\"size\":\"regular\",\"count\":2,"
+				+ "\"nonRefundableCount\":0,\"weightPounds\":0.063,\"weightEstimated\":true,"
 				+ "\"countValue\":0.10,\"weightValue\":0.10,\"method\":\"count\",\"payout\":0.10}],\"total\":0.10}", json);
 	}
 

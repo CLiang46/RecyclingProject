@@ -6,10 +6,12 @@ It's a plain Java backend (no frameworks, no build tool) serving a small web pag
 ## How payouts are calculated
 
 - **CRV per container:** 5¢ for containers under 24 oz, 10¢ for 24 oz or more. Non-CRV containers earn nothing.
-- **Count vs. weight:** for each material, loads of **50 or fewer** refundable containers are paid **by count**. Larger loads are paid **by weight**
-  at that material's per-pound rate, like California recycling centers do.
-- **Weight:** enter the actual weight (in pounds) if you've weighed your load. Otherwise the calculator estimates it from typical
-  empty-container weights.
+- **Count vs. weight:** each material is split into **regular** and **large** groups, and each group is paid on its own.
+  A group of **50 or fewer** refundable containers is paid **by count**. A larger group is paid **by weight** at that
+  material's per-pound rate, like California recycling centers do. For example, 40 regular and 60 large PET bottles
+  means the regular ones are paid by count and the large ones by weight.
+- **Weight:** enter the actual weight (in pounds) of each group if you've weighed it. Otherwise the calculator estimates it
+  from typical empty-container weights. A group with a weight but no count is paid by weight.
 - The results show both the by-count and by-weight values, so you can see which way the rules apply.
 
 Rates and typical container weights are in [`Material.java`](Newproj/src/com/recycleproj/Material.java). Update them there when
@@ -42,7 +44,8 @@ Run the tests with `./run.sh test` or `.\run.ps1 test`.
 
 `/api/calculate` takes query-string or form-encoded parameters for each material key
 (`aluminum`, `bimetal`, `glass`, `pet`, `hdpe`, `pvc`, `ldpe`, `pp`, `ps`, `other`):
-`{key}_regular`, `{key}_large`, `{key}_nonrefundable` (counts) and `{key}_weight` (pounds, optional).
+`{key}_regular`, `{key}_large`, `{key}_nonrefundable` (counts) and `{key}_regular_weight`, `{key}_large_weight`
+(pounds, optional). The response has one result per material and size group.
 
 ```sh
 curl "http://127.0.0.1:8080/api/calculate?aluminum_regular=30&pet_regular=80"

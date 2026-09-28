@@ -18,6 +18,8 @@
 	th, td { padding: .45rem .5rem; border-bottom: 1px solid #e3e9e3; text-align: right; }
 	th:first-child, td:first-child { text-align: left; }
 	thead th { background: var(--light); font-weight: 600; font-size: .9rem; }
+	thead th[colspan] { text-align: center; }
+	thead tr + tr th:first-child { text-align: right; }
 	input[type=number] { width: 6.5rem; padding: .3rem .4rem; border: 1px solid var(--border); border-radius: 4px; text-align: right; }
 	input:invalid { border-color: #c62828; }
 	.hint { color: #5b6b5d; font-size: .85rem; }
@@ -46,11 +48,16 @@
 				<table>
 					<thead>
 						<tr>
-							<th>Material</th>
-							<th>Regular<br><span class="hint">under 24 oz</span></th>
-							<th>Large<br><span class="hint">24 oz or more</span></th>
-							<th>Non-CRV<br><span class="hint">no refund</span></th>
-							<th>Actual weight (lb)<br><span class="hint">optional</span></th>
+							<th rowspan="2">Material</th>
+							<th colspan="2">Regular <span class="hint">(under 24 oz)</span></th>
+							<th colspan="2">Large <span class="hint">(24 oz or more)</span></th>
+							<th rowspan="2">Non-CRV<br><span class="hint">no refund</span></th>
+						</tr>
+						<tr>
+							<th>Count</th>
+							<th>Weight (lb)<br><span class="hint">optional</span></th>
+							<th>Count</th>
+							<th>Weight (lb)<br><span class="hint">optional</span></th>
 						</tr>
 					</thead>
 					<tbody id="inputs"></tbody>
@@ -70,6 +77,7 @@
 				<thead>
 					<tr>
 						<th>Material</th>
+						<th>Size</th>
 						<th>Refundable</th>
 						<th>Weight (lb)</th>
 						<th>By count</th>
@@ -79,10 +87,10 @@
 					</tr>
 				</thead>
 				<tbody id="results"></tbody>
-				<tfoot><tr><td colspan="6">Total</td><td id="footTotal">$0.00</td></tr></tfoot>
+				<tfoot><tr><td colspan="7">Total</td><td id="footTotal">$0.00</td></tr></tfoot>
 			</table>
 		</div>
-		<p class="hint">Weights marked with * are estimated from typical empty-container weights. Enter an actual weight for a more accurate by-weight value.</p>
+		<p class="hint">Regular and large containers are counted and weighed separately. Weights marked with * are estimated from typical empty-container weights; enter an actual weight for a more accurate by-weight value.</p>
 	</section>
 	<p class="error" id="error" role="alert"></p>
 </main>
@@ -114,8 +122,8 @@
 		const data = await res.json();
 		$('rules').textContent =
 			'Refundable containers earn ' + money(data.regularCrv) + ' each (under ' + data.largeContainerOz + ' oz) or ' +
-			money(data.largeCrv) + ' each (' + data.largeContainerOz + ' oz or more). Materials with more than ' +
-			data.countLimit + ' refundable containers are paid by weight instead.';
+			money(data.largeCrv) + ' each (' + data.largeContainerOz + ' oz or more). Regular and large containers are ' +
+			'counted separately: any group with more than ' + data.countLimit + ' refundable containers is paid by weight instead.';
 		const body = $('inputs');
 		for (const m of data.materials) {
 			const tr = document.createElement('tr');
@@ -128,9 +136,10 @@
 			first.appendChild(rate);
 			tr.appendChild(first);
 			tr.appendChild(cell(numberInput(m.key + '_regular', '1', m.name + ' regular count')));
+			tr.appendChild(cell(numberInput(m.key + '_regular_weight', '0.01', m.name + ' regular weight in pounds')));
 			tr.appendChild(cell(numberInput(m.key + '_large', '1', m.name + ' large count')));
+			tr.appendChild(cell(numberInput(m.key + '_large_weight', '0.01', m.name + ' large weight in pounds')));
 			tr.appendChild(cell(numberInput(m.key + '_nonrefundable', '1', m.name + ' non-CRV count')));
-			tr.appendChild(cell(numberInput(m.key + '_weight', '0.01', m.name + ' actual weight in pounds')));
 			body.appendChild(tr);
 		}
 	}
@@ -141,7 +150,8 @@
 		for (const r of data.results) {
 			const tr = document.createElement('tr');
 			tr.appendChild(cell(r.name));
-			let count = String(r.regularCount + r.largeCount);
+			tr.appendChild(cell(r.size === 'large' ? 'Large' : 'Regular'));
+			let count = String(r.count);
 			if (r.nonRefundableCount > 0) count += ' (+' + r.nonRefundableCount + ' non-CRV)';
 			tr.appendChild(cell(count));
 			tr.appendChild(cell(Number(r.weightPounds).toFixed(2) + (r.weightEstimated ? '*' : '')));
@@ -157,7 +167,7 @@
 		if (data.results.length === 0) {
 			const tr = document.createElement('tr');
 			const td = cell('Enter some containers above to see your payout.');
-			td.colSpan = 7;
+			td.colSpan = 8;
 			tr.appendChild(td);
 			body.appendChild(tr);
 		}
