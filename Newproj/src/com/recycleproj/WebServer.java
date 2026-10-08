@@ -87,7 +87,16 @@ public class WebServer {
 					.append(",\"largeContainerOz\":").append(Recycle.LARGE_CONTAINER_OZ)
 					.append(",\"regularCrv\":").append(money(Recycle.REGULAR_CRV))
 					.append(",\"largeCrv\":").append(money(Recycle.LARGE_CRV))
-					.append(",\"materials\":[");
+					.append(",\"categories\":[");
+			Material.Category[] categories = Material.Category.values();
+			for (int i = 0; i < categories.length; i++) {
+				if (i > 0) {
+					sb.append(',');
+				}
+				sb.append("{\"key\":").append(quote(categories[i].getKey()))
+						.append(",\"name\":").append(quote(categories[i].getDisplayName())).append('}');
+			}
+			sb.append("],\"materials\":[");
 			Material[] all = Material.values();
 			for (int i = 0; i < all.length; i++) {
 				Material m = all[i];
@@ -96,6 +105,7 @@ public class WebServer {
 				}
 				sb.append("{\"key\":").append(quote(m.getKey()))
 						.append(",\"name\":").append(quote(m.getDisplayName()))
+						.append(",\"category\":").append(quote(m.getCategory().getKey()))
 						.append(",\"perPoundRate\":").append(num(m.getPerPoundRate(), 4))
 						.append(",\"regularWeightOz\":").append(num(m.getEmptyWeightOz(false), 2))
 						.append(",\"largeWeightOz\":").append(num(m.getEmptyWeightOz(true), 2))

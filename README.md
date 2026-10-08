@@ -5,6 +5,10 @@ It's a plain Java backend (no frameworks, no build tool) serving a small web pag
 
 ## How payouts are calculated
 
+The page first asks what you're recycling (**cans**, **glass**, **plastic**, or any combination), then shows count and
+weight fields for just those categories. Use **Change categories** to go back; fields for categories you deselect
+are left out of the calculation.
+
 - **CRV per container:** 5¢ for containers under 24 oz, 10¢ for 24 oz or more. Non-CRV containers earn nothing.
 - **Count vs. weight:** each material is split into **regular** and **large** groups, and each group is paid on its own.
   A group of **50 or fewer** refundable containers is paid **by count**. A larger group is paid **by weight** at that
@@ -41,7 +45,7 @@ Run the tests with `./run.sh test` or `.\run.ps1 test`.
 | Endpoint | Description |
 | --- | --- |
 | `GET /` | The calculator page |
-| `GET /api/materials` | Materials, per-pound rates and estimated container weights |
+| `GET /api/materials` | Categories, materials, per-pound rates and estimated container weights |
 | `GET` or `POST /api/calculate` | Payout for a load |
 
 `/api/calculate` takes query-string or form-encoded parameters for each material key

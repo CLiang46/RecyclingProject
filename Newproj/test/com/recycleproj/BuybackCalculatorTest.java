@@ -13,6 +13,7 @@ public class BuybackCalculatorTest {
 		nonRefundableContainersEarnNothing();
 		glassBottleUsesItsOwnRate();
 		glassColorsAreCountedSeparately();
+		materialsAreGroupedIntoCategories();
 		smallLoadsArePaidByCount();
 		countLimitAppliesPerSizeGroup();
 		loadsOverFiftyArePaidByWeight();
@@ -49,6 +50,17 @@ public class BuybackCalculatorTest {
 		assertEquals("green material", Material.GLASS_GREEN, new GlassBottle(12, true, "green").getMaterial());
 		assertEquals("dark is brown", Material.GLASS_BROWN, new GlassBottle(12, true, "dark").getMaterial());
 		expectThrows("unknown glass color", () -> new GlassBottle(12, true, "purple"));
+	}
+
+	static void materialsAreGroupedIntoCategories() {
+		assertEquals("aluminum is a can", Material.Category.CANS, Material.ALUMINUM.getCategory());
+		assertEquals("bimetal is a can", Material.Category.CANS, Material.BIMETAL.getCategory());
+		for (Material m : Material.values()) {
+			Recycle sample = m.newContainer(12, true);
+			Material.Category expected = sample instanceof Can ? Material.Category.CANS
+					: sample instanceof GlassBottle ? Material.Category.GLASS : Material.Category.PLASTIC;
+			assertEquals(m + " category matches its container class", expected, m.getCategory());
+		}
 	}
 
 	static void glassColorsAreCountedSeparately() {
