@@ -1,0 +1,12 @@
+# Build output
+Newproj/build/
+Newproj/build-test/
+Newproj/bin/
+*.class
+
+# IDE
+.settings/
+.idea/
+*.iml
+.vscode/
+.DS_Store
