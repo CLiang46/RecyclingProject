@@ -7,6 +7,7 @@
 <style>
 	:root { --green: #2e7d32; --light: #e8f5e9; --border: #c8d6c9; }
 	* { box-sizing: border-box; }
+	[hidden] { display: none !important; }
 	body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f6f8f6; color: #1d2b1f; }
 	header { background: var(--green); color: #fff; padding: 1.25rem 1.5rem; }
 	header h1 { margin: 0; font-size: 1.5rem; }
@@ -40,14 +41,59 @@
 	button:disabled { opacity: .5; cursor: not-allowed; }
 	tr.category th { text-align: left; background: #f1f5f1; font-size: .95rem; }
 	.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+	header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+	header .account { display: flex; align-items: center; gap: .75rem; }
+	header button { background: #fff; color: var(--green); border-color: #fff; font-size: .95rem; padding: .4rem .9rem; }
+	input[type=text], input[type=password] { padding: .45rem .55rem; border: 1px solid var(--border); border-radius: 4px; font-size: 1rem; }
+	.login-fields { display: flex; gap: .75rem; flex-wrap: wrap; align-items: end; }
+	.login-fields label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
+	.save-row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
+	.save-row input { flex: 1 1 14rem; max-width: 24rem; }
+	.ok { color: var(--green); font-weight: 600; }
+	td.buttons { white-space: nowrap; }
+	td.buttons button { font-size: .85rem; padding: .3rem .7rem; margin-left: .4rem; }
+	button.danger { background: #fff; color: #c62828; border-color: #c62828; }
 </style>
 </head>
 <body>
 <header>
-	<h1>Recycling Buyback Calculator</h1>
-	<p>Estimate how much you can earn recycling CRV cans and bottles.</p>
+	<div>
+		<h1>Recycling Buyback Calculator</h1>
+		<p>Estimate how much you can earn recycling CRV cans and bottles.</p>
+	</div>
+	<div class="account" id="account" hidden>
+		<span id="whoami"></span>
+		<button type="button" id="show-login">Log in</button>
+		<button type="button" id="logout" hidden>Log out</button>
+	</div>
 </header>
 <main>
+	<section id="login-panel" hidden>
+		<div class="toolbar">
+			<h2>Log in or create an account</h2>
+			<button type="button" class="secondary" id="hide-login">Close</button>
+		</div>
+		<p class="hint">An account lets you save calculations and come back to them later. Usernames are 3-32 letters, digits, '.', '_' or '-'; passwords need at least 8 characters.</p>
+		<form id="login-form">
+			<div class="login-fields">
+				<label>Username <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="32"></label>
+				<label>Password <input type="password" name="password" autocomplete="current-password" required minlength="8" maxlength="200"></label>
+				<button type="submit" data-action="login">Log in</button>
+				<button type="submit" class="secondary" data-action="register">Create account</button>
+			</div>
+		</form>
+		<p class="error" id="login-error" role="alert"></p>
+	</section>
+
+	<section id="saved-panel" hidden>
+		<h2>Saved calculations</h2>
+		<div class="scroll">
+			<table>
+				<thead><tr><th>Name</th><th>Saved</th><th>Total</th><th></th></tr></thead>
+				<tbody id="saved"></tbody>
+			</table>
+		</div>
+	</section>
 	<section id="step-choose">
 		<h2>What are you recycling?</h2>
 		<p class="hint">Choose one or more. You can change this later.</p>
@@ -93,6 +139,7 @@
 	</section>
 
 	<section id="output" hidden>
+		<p class="hint" id="viewing" hidden></p>
 		<h2>Estimated payout: <span class="total" id="total">$0.00</span></h2>
 		<div class="scroll">
 			<table>
@@ -113,13 +160,24 @@
 			</table>
 		</div>
 		<p class="hint">Regular and large containers are counted and weighed separately. Weights marked with * are estimated from typical empty-container weights; enter an actual weight for a more accurate by-weight value.</p>
-	</section>
+				<form class="save-row" id="save-form" hidden>
+					<input type="text" name="name" id="save-name" maxlength="100" required placeholder="Name this calculation, e.g. Saturday drop-off" aria-label="Calculation name">
+					<button type="submit">Save</button>
+					<span id="save-status" class="ok" role="status"></span>
+				</form>
+				<p class="hint" id="save-login-hint" hidden>Log in to save this calculation.</p>
+			</section>
 	<p class="error" id="error" role="alert"></p>
 </main>
 
 <script>
 	const $ = id => document.getElementById(id);
 	const money = v => '$' + Number(v).toFixed(2);
+	const inputCategory = {};
+	let accountsEnabled = false;
+	let currentUser = null;
+	// Form-encoded inputs behind the results on screen; null when there's nothing new to save.
+	let lastParams = null;
 
 	function cell(content) {
 		const td = document.createElement('td');
@@ -190,6 +248,7 @@
 				tr.appendChild(cell(numberInput(m.key + '_large', '1', m.name + ' large count')));
 				tr.appendChild(cell(numberInput(m.key + '_large_weight', '0.01', m.name + ' large weight in pounds')));
 				tr.appendChild(cell(numberInput(m.key + '_nonrefundable', '1', m.name + ' non-CRV count')));
+				for (const input of tr.querySelectorAll('input')) inputCategory[input.name] = c.key;
 				body.appendChild(tr);
 			}
 		}
@@ -226,7 +285,11 @@
 	});
 	$('change').addEventListener('click', () => showStep('choose'));
 
-	function showResults(data) {
+	function showResults(data, viewingText) {
+		$('viewing').hidden = !viewingText;
+		$('viewing').textContent = viewingText || '';
+		$('save-status').textContent = '';
+		updateSaveVisibility();
 		const body = $('results');
 		body.replaceChildren();
 		for (const r of data.results) {
@@ -276,6 +339,7 @@
 			});
 			const data = await res.json();
 			if (!res.ok) throw new Error(data.error || 'Request failed');
+			lastParams = params.toString();
 			showResults(data);
 		} catch (e) {
 			$('error').textContent = e.message;
@@ -285,9 +349,161 @@
 	$('form').addEventListener('reset', () => {
 		$('output').hidden = true;
 		$('error').textContent = '';
+		lastParams = null;
 	});
 
-	loadMaterials().catch(e => { $('error').textContent = e.message; });
+	// ---- Accounts and saved calculations ----
+
+	async function api(url, options) {
+		const res = await fetch(url, options);
+		const data = res.status === 204 ? {} : await res.json().catch(() => ({}));
+		if (res.status === 401 && currentUser) setUser(null);
+		if (!res.ok) throw new Error(data.error || 'Request failed (' + res.status + ')');
+		return data;
+	}
+
+	const formPost = body => ({
+		method: 'POST',
+		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+		body
+	});
+
+	function updateSaveVisibility() {
+		$('save-form').hidden = !(currentUser && lastParams !== null);
+		$('save-login-hint').hidden = !(accountsEnabled && !currentUser && lastParams !== null);
+	}
+
+	function setUser(name) {
+		currentUser = name;
+		$('account').hidden = !accountsEnabled;
+		$('whoami').textContent = name ? 'Signed in as ' + name : '';
+		$('show-login').hidden = !!name;
+		$('logout').hidden = !name;
+		$('saved-panel').hidden = !name;
+		if (name) $('login-panel').hidden = true;
+		updateSaveVisibility();
+		if (name) loadSaved().catch(e => { $('error').textContent = e.message; });
+		else $('saved').replaceChildren();
+	}
+
+	async function refreshAccount() {
+		const data = await api('/api/me');
+		accountsEnabled = data.accountsEnabled;
+		setUser(data.username);
+	}
+
+	$('show-login').addEventListener('click', () => {
+		$('login-panel').hidden = false;
+		$('login-error').textContent = '';
+		$('login-form').elements.username.focus();
+	});
+	$('hide-login').addEventListener('click', () => { $('login-panel').hidden = true; });
+
+	$('login-form').addEventListener('submit', async event => {
+		event.preventDefault();
+		const form = event.target;
+		const action = event.submitter && event.submitter.dataset.action === 'register' ? 'register' : 'login';
+		$('login-error').textContent = '';
+		if (!form.checkValidity()) {
+			$('login-error').textContent = 'Enter a username (3-32 characters) and a password (at least 8 characters).';
+			return;
+		}
+		try {
+			const data = await api('/api/' + action, formPost(new URLSearchParams(new FormData(form))));
+			form.reset();
+			setUser(data.username);
+		} catch (e) {
+			$('login-error').textContent = e.message;
+		}
+	});
+
+	$('logout').addEventListener('click', async () => {
+		try {
+			await api('/api/logout', { method: 'POST' });
+		} finally {
+			setUser(null);
+		}
+	});
+
+	function smallButton(text, className, onClick) {
+		const b = document.createElement('button');
+		b.type = 'button';
+		b.className = className;
+		b.textContent = text;
+		b.addEventListener('click', onClick);
+		return b;
+	}
+
+	async function loadSaved() {
+		const data = await api('/api/calculations');
+		const body = $('saved');
+		body.replaceChildren();
+		for (const s of data.calculations) {
+			const tr = document.createElement('tr');
+			tr.appendChild(cell(s.name));
+			tr.appendChild(cell(new Date(s.createdAt).toLocaleString()));
+			tr.appendChild(cell(money(s.total)));
+			const actions = cell('');
+			actions.className = 'buttons';
+			actions.append(
+				smallButton('Open', 'secondary', () => openSaved(s.id).catch(e => { $('error').textContent = e.message; })),
+				smallButton('Delete', 'danger', () => deleteSaved(s).catch(e => { $('error').textContent = e.message; })));
+			tr.appendChild(actions);
+			body.appendChild(tr);
+		}
+		if (data.calculations.length === 0) {
+			const tr = document.createElement('tr');
+			const td = cell('Nothing saved yet. Calculate a payout, then use Save below the results.');
+			td.colSpan = 4;
+			tr.appendChild(td);
+			body.appendChild(tr);
+		}
+	}
+
+	async function openSaved(id) {
+		const data = await api('/api/calculations/' + id);
+		const params = new URLSearchParams(data.inputs);
+		const categories = new Set([...params.keys()].map(k => inputCategory[k]).filter(Boolean));
+		for (const box of document.querySelectorAll('#choices input')) {
+			box.checked = categories.size === 0 || categories.has(box.value);
+		}
+		$('continue').disabled = false;
+		$('form').reset();
+		showStep('calc');
+		const fields = $('form').elements;
+		for (const [k, v] of params) if (fields[k]) fields[k].value = v;
+		showResults(data.result, 'Saved calculation "' + data.name + '" from ' + new Date(data.createdAt).toLocaleString());
+		$('output').scrollIntoView({ behavior: 'smooth' });
+	}
+
+	async function deleteSaved(s) {
+		if (!confirm('Delete "' + s.name + '"?')) return;
+		await api('/api/calculations/' + s.id, { method: 'DELETE' });
+		await loadSaved();
+	}
+
+	$('save-form').addEventListener('submit', async event => {
+		event.preventDefault();
+		const name = $('save-name').value.trim();
+		if (!name) {
+			$('save-status').textContent = '';
+			$('error').textContent = 'Give the calculation a name to save it.';
+			return;
+		}
+		$('error').textContent = '';
+		const body = new URLSearchParams(lastParams);
+		body.set('name', name);
+		try {
+			await api('/api/calculations', formPost(body));
+			$('save-name').value = '';
+			$('save-status').textContent = 'Saved.';
+			await loadSaved();
+		} catch (e) {
+			$('error').textContent = e.message;
+		}
+	});
+
+	loadMaterials().then(refreshAccount).catch(e => { $('error').textContent = e.message; });
 </script>
 </body>
 </html>

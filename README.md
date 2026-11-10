@@ -23,6 +23,23 @@ are left out of the calculation.
 Rates and typical container weights are in [`Material.java`](Newproj/src/com/recycleproj/Material.java). Update them there when
 CalRecycle changes its rates.
 
+## Accounts and saved calculations
+
+Use **Log in** at the top of the page to create an account or sign in. Once you're signed in, a **Save** box appears under
+each result: give the calculation a name to store it. Your saved calculations are listed at the top of the page. **Open**
+restores the categories, the form and the results; **Delete** removes it. The calculator itself works without an account.
+
+- Everything is stored in a SQLite database file, `data/recycling.db` by default (change it with `--db <file>`). Back up
+  that file to keep your history. It's ignored by git.
+- Passwords are stored as salted PBKDF2-SHA256 hashes, never as plain text. Logins last 7 days and use an HttpOnly,
+  SameSite=Strict cookie. Five wrong passwords in a row lock that username for 5 minutes.
+- Saved results are recalculated on the server, so they always match the inputs that were saved.
+- The run scripts download the SQLite JDBC driver ([sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)) into `lib/`
+  on the first run and check its SHA-256 checksum. If the driver is missing, or you pass `--no-db`, the server starts
+  without accounts.
+- The server is plain HTTP and listens only on `127.0.0.1` by default. Don't expose it to the internet with `--host 0.0.0.0`
+  without putting HTTPS in front of it.
+
 ## Running
 
 Requires JDK 17 or newer (`java` and `javac` on your `PATH`). Run from the repository root:
@@ -36,9 +53,9 @@ powershell -ExecutionPolicy Bypass -File .\run.ps1    # Windows
 ```
 
 Then open <http://127.0.0.1:8080/>. Options: `--port 9000`, `--host 0.0.0.0` (to allow other devices on your network),
-`--webroot <dir>`.
+`--webroot <dir>`, `--db <file>`, `--no-db`.
 
-Run the tests with `./run.sh test` or `.\run.ps1 test`.
+Run the tests with `./run.sh test` or `.\run.ps1 test`. The first run needs internet access to download the SQLite driver.
 
 ## API
 
@@ -47,6 +64,11 @@ Run the tests with `./run.sh test` or `.\run.ps1 test`.
 | `GET /` | The calculator page |
 | `GET /api/materials` | Categories, materials, per-pound rates and estimated container weights |
 | `GET` or `POST /api/calculate` | Payout for a load |
+| `POST /api/register`, `POST /api/login` | Create an account or sign in (`username`, `password`); sets the session cookie |
+| `POST /api/logout`, `GET /api/me` | Sign out; check who is signed in and whether accounts are enabled |
+| `GET /api/calculations` | Your saved calculations, newest first |
+| `POST /api/calculations` | Save: `name` plus the same parameters as `/api/calculate` |
+| `GET` or `DELETE /api/calculations/{id}` | Open (inputs and results) or delete a saved calculation |
 
 `/api/calculate` takes query-string or form-encoded parameters for each material key
 (`aluminum`, `bimetal`, `glass_clear`, `glass_green`, `glass_brown`, `pet`, `hdpe`, `pvc`, `ldpe`, `pp`, `ps`, `other`):
@@ -67,6 +89,10 @@ Newproj/src/com/recycleproj/
   Material.java             per-material rates and typical container weights
   BuybackCalculator.java    count/weight payout rules
   WebServer.java            HTTP server (JDK built-in com.sun.net.httpserver)
+  Database.java             SQLite tables for users, sessions and saved calculations
+  AuthService.java          sign-up, login, sessions and lockout
+  PasswordHasher.java       salted PBKDF2 password hashes
+  CalculationStore.java     save/list/open/delete calculations, per user
   Main.java                 entry point
 Newproj/test/               dependency-free tests
 BuybackCalculatorFrontend/src/main/webapp/MainPage.html   the web page

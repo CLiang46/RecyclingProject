@@ -4,6 +4,10 @@ Newproj/build-test/
 Newproj/bin/
 *.class
 
+# Downloaded driver and local database
+lib/
+data/
+
 # IDE
 .settings/
 .idea/
