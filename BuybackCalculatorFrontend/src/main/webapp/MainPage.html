@@ -64,25 +64,43 @@
 	<div class="account" id="account" hidden>
 		<span id="whoami"></span>
 		<button type="button" id="show-login">Log in</button>
+		<button type="button" id="show-register">Create account</button>
 		<button type="button" id="logout" hidden>Log out</button>
 	</div>
 </header>
 <main>
 	<section id="login-panel" hidden>
 		<div class="toolbar">
-			<h2>Log in or create an account</h2>
-			<button type="button" class="secondary" id="hide-login">Close</button>
+			<h2>Log in</h2>
+			<button type="button" class="secondary" data-close>Close</button>
 		</div>
-		<p class="hint">An account lets you save calculations and come back to them later. Usernames are 3-32 letters, digits, '.', '_' or '-'; passwords need at least 8 characters.</p>
 		<form id="login-form">
 			<div class="login-fields">
 				<label>Username <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="32"></label>
 				<label>Password <input type="password" name="password" autocomplete="current-password" required minlength="8" maxlength="200"></label>
-				<button type="submit" data-action="login">Log in</button>
-				<button type="submit" class="secondary" data-action="register">Create account</button>
+				<button type="submit">Log in</button>
 			</div>
 		</form>
 		<p class="error" id="login-error" role="alert"></p>
+		<p class="hint">Don't have an account? <a href="#" id="to-register">Create one</a>.</p>
+	</section>
+
+	<section id="register-panel" hidden>
+		<div class="toolbar">
+			<h2>Create an account</h2>
+			<button type="button" class="secondary" data-close>Close</button>
+		</div>
+		<p class="hint">An account lets you save calculations and come back to them later. Usernames are 3-32 letters, digits, '.', '_' or '-'; passwords need at least 8 characters.</p>
+		<form id="register-form">
+			<div class="login-fields">
+				<label>Username <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_.\-]{3,32}"></label>
+				<label>Password <input type="password" name="password" autocomplete="new-password" required minlength="8" maxlength="200"></label>
+				<label>Confirm password <input type="password" name="confirm" autocomplete="new-password" required minlength="8" maxlength="200"></label>
+				<button type="submit">Create account</button>
+			</div>
+		</form>
+		<p class="error" id="register-error" role="alert"></p>
+		<p class="hint">Already have an account? <a href="#" id="to-login">Log in</a>.</p>
 	</section>
 
 	<section id="saved-panel" hidden>
@@ -165,7 +183,7 @@
 					<button type="submit">Save</button>
 					<span id="save-status" class="ok" role="status"></span>
 				</form>
-				<p class="hint" id="save-login-hint" hidden>Log in to save this calculation.</p>
+				<p class="hint" id="save-login-hint" hidden>Log in or create an account to save this calculation.</p>
 			</section>
 	<p class="error" id="error" role="alert"></p>
 </main>
@@ -378,9 +396,10 @@
 		$('account').hidden = !accountsEnabled;
 		$('whoami').textContent = name ? 'Signed in as ' + name : '';
 		$('show-login').hidden = !!name;
+		$('show-register').hidden = !!name;
 		$('logout').hidden = !name;
 		$('saved-panel').hidden = !name;
-		if (name) $('login-panel').hidden = true;
+		if (name) showPanel(null);
 		updateSaveVisibility();
 		if (name) loadSaved().catch(e => { $('error').textContent = e.message; });
 		else $('saved').replaceChildren();
@@ -392,29 +411,58 @@
 		setUser(data.username);
 	}
 
-	$('show-login').addEventListener('click', () => {
-		$('login-panel').hidden = false;
-		$('login-error').textContent = '';
-		$('login-form').elements.username.focus();
-	});
-	$('hide-login').addEventListener('click', () => { $('login-panel').hidden = true; });
+	// which: 'login', 'register' or null to close both panels.
+	function showPanel(which) {
+		for (const kind of ['login', 'register']) {
+			const open = kind === which;
+			$(kind + '-panel').hidden = !open;
+			$(kind + '-error').textContent = '';
+			if (open) $(kind + '-form').elements.username.focus();
+		}
+	}
 
-	$('login-form').addEventListener('submit', async event => {
-		event.preventDefault();
-		const form = event.target;
-		const action = event.submitter && event.submitter.dataset.action === 'register' ? 'register' : 'login';
-		$('login-error').textContent = '';
-		if (!form.checkValidity()) {
-			$('login-error').textContent = 'Enter a username (3-32 characters) and a password (at least 8 characters).';
+	$('show-login').addEventListener('click', () => showPanel('login'));
+	$('show-register').addEventListener('click', () => showPanel('register'));
+	$('to-login').addEventListener('click', e => { e.preventDefault(); showPanel('login'); });
+	$('to-register').addEventListener('click', e => { e.preventDefault(); showPanel('register'); });
+	document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => showPanel(null)));
+
+	async function submitAccount(form, action, errorId, validate) {
+		$(errorId).textContent = '';
+		const problem = validate();
+		if (problem) {
+			$(errorId).textContent = problem;
 			return;
 		}
+		const body = new URLSearchParams();
+		body.set('username', form.elements.username.value);
+		body.set('password', form.elements.password.value);
 		try {
-			const data = await api('/api/' + action, formPost(new URLSearchParams(new FormData(form))));
+			const data = await api('/api/' + action, formPost(body));
 			form.reset();
 			setUser(data.username);
 		} catch (e) {
-			$('login-error').textContent = e.message;
+			$(errorId).textContent = e.message;
 		}
+	}
+
+	$('login-form').addEventListener('submit', event => {
+		event.preventDefault();
+		const form = event.target;
+		submitAccount(form, 'login', 'login-error', () => form.checkValidity() ? null
+			: 'Enter your username and password.');
+	});
+
+	$('register-form').addEventListener('submit', event => {
+		event.preventDefault();
+		const form = event.target;
+		submitAccount(form, 'register', 'register-error', () => {
+			const f = form.elements;
+			if (!f.username.checkValidity()) return 'Usernames are 3-32 letters, digits, \'.\', \'_\' or \'-\'.';
+			if (!f.password.checkValidity()) return 'Passwords need 8-200 characters.';
+			if (f.password.value !== f.confirm.value) return 'The passwords don\'t match.';
+			return null;
+		});
 	});
 
 	$('logout').addEventListener('click', async () => {

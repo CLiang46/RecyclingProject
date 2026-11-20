@@ -25,7 +25,7 @@ CalRecycle changes its rates.
 
 ## Accounts and saved calculations
 
-Use **Log in** at the top of the page to create an account or sign in. Once you're signed in, a **Save** box appears under
+Use **Create account** at the top of the page to sign up (you'll be asked to type your password twice), or **Log in** if you already have an account. Once you're signed in, a **Save** box appears under
 each result: give the calculation a name to store it. Your saved calculations are listed at the top of the page. **Open**
 restores the categories, the form and the results; **Delete** removes it. The calculator itself works without an account.
 
