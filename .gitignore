@@ -4,6 +4,13 @@ Newproj/build-test/
 Newproj/bin/
 *.class
 
+# Downloaded driver and local database
+lib/
+data/
+
+# Email settings (contains the SMTP password)
+mail.properties
+
 # IDE
 .settings/
 .idea/

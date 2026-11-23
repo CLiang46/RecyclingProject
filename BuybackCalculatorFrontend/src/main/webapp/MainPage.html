@@ -7,6 +7,7 @@
 <style>
 	:root { --green: #2e7d32; --light: #e8f5e9; --border: #c8d6c9; }
 	* { box-sizing: border-box; }
+	[hidden] { display: none !important; }
 	body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f6f8f6; color: #1d2b1f; }
 	header { background: var(--green); color: #fff; padding: 1.25rem 1.5rem; }
 	header h1 { margin: 0; font-size: 1.5rem; }
@@ -40,14 +41,101 @@
 	button:disabled { opacity: .5; cursor: not-allowed; }
 	tr.category th { text-align: left; background: #f1f5f1; font-size: .95rem; }
 	.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+	header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+	header .account { display: flex; align-items: center; gap: .75rem; }
+	header button { background: #fff; color: var(--green); border-color: #fff; font-size: .95rem; padding: .4rem .9rem; }
+	input[type=text], input[type=password] { padding: .45rem .55rem; border: 1px solid var(--border); border-radius: 4px; font-size: 1rem; }
+	.login-fields { display: flex; gap: .75rem; flex-wrap: wrap; align-items: end; }
+	.login-fields label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
+	.save-row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
+	.save-row input { flex: 1 1 14rem; max-width: 24rem; }
+	.ok { color: var(--green); font-weight: 600; }
+	td.buttons { white-space: nowrap; }
+	td.buttons button { font-size: .85rem; padding: .3rem .7rem; margin-left: .4rem; }
+	button.danger { background: #fff; color: #c62828; border-color: #c62828; }
 </style>
 </head>
 <body>
 <header>
-	<h1>Recycling Buyback Calculator</h1>
-	<p>Estimate how much you can earn recycling CRV cans and bottles.</p>
+	<div>
+		<h1>Recycling Buyback Calculator</h1>
+		<p>Estimate how much you can earn recycling CRV cans and bottles.</p>
+	</div>
+	<div class="account" id="account" hidden>
+		<span id="whoami"></span>
+		<button type="button" id="show-login">Log in</button>
+		<button type="button" id="show-register">Create account</button>
+		<button type="button" id="logout" hidden>Log out</button>
+	</div>
 </header>
 <main>
+	<section id="login-panel" hidden>
+		<div class="toolbar">
+			<h2>Log in</h2>
+			<button type="button" class="secondary" data-close>Close</button>
+		</div>
+		<form id="login-form">
+			<div class="login-fields">
+				<label>Username <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="32"></label>
+				<label>Password <input type="password" name="password" autocomplete="current-password" required minlength="8" maxlength="200"></label>
+				<button type="submit">Log in</button>
+			</div>
+		</form>
+		<p class="error" id="login-error" role="alert"></p>
+		<p class="hint">Don't have an account? <a href="#" id="to-register">Create one</a>.</p>
+	</section>
+
+	<section id="register-panel" hidden>
+		<div class="toolbar">
+			<h2>Create an account</h2>
+			<button type="button" class="secondary" data-close>Close</button>
+		</div>
+		<p class="hint">An account lets you save calculations and come back to them later. Usernames are 3-32 letters, digits, '.', '_' or '-'; passwords need at least 8 characters. We'll email you a code to confirm your address, and again each time you log in.</p>
+		<form id="register-form">
+			<div class="login-fields">
+				<label>Username <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_.\-]{3,32}"></label>
+				<label>Email <input type="email" name="email" autocomplete="email" required maxlength="254"></label>
+				<label>Password <input type="password" name="password" autocomplete="new-password" required minlength="8" maxlength="200"></label>
+				<label>Confirm password <input type="password" name="confirm" autocomplete="new-password" required minlength="8" maxlength="200"></label>
+				<button type="submit">Create account</button>
+			</div>
+		</form>
+		<p class="error" id="register-error" role="alert"></p>
+		<p class="hint">Already have an account? <a href="#" id="to-login">Log in</a>.</p>
+	</section>
+
+	<section id="verify-panel" hidden>
+		<div class="toolbar">
+			<h2>Check your email</h2>
+			<button type="button" class="secondary" data-close>Cancel</button>
+		</div>
+		<form id="email-form" hidden>
+			<p class="hint">Your account doesn't have an email address yet. Add one so we can send you a sign-in code.</p>
+			<div class="login-fields">
+				<label>Email <input type="email" name="email" autocomplete="email" required maxlength="254"></label>
+				<button type="submit">Send code</button>
+			</div>
+		</form>
+		<form id="verify-form">
+			<p class="hint" id="verify-sent"></p>
+			<div class="login-fields">
+				<label>Code <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" required pattern="\s*\d{6}\s*" maxlength="12"></label>
+				<button type="submit">Verify</button>
+			</div>
+			<p class="hint">Didn't get it? Check your spam folder or <a href="#" id="resend-code">send a new code</a>.</p>
+		</form>
+		<p class="error" id="verify-error" role="alert"></p>
+	</section>
+
+	<section id="saved-panel" hidden>
+		<h2>Saved calculations</h2>
+		<div class="scroll">
+			<table>
+				<thead><tr><th>Name</th><th>Saved</th><th>Total</th><th></th></tr></thead>
+				<tbody id="saved"></tbody>
+			</table>
+		</div>
+	</section>
 	<section id="step-choose">
 		<h2>What are you recycling?</h2>
 		<p class="hint">Choose one or more. You can change this later.</p>
@@ -93,6 +181,7 @@
 	</section>
 
 	<section id="output" hidden>
+		<p class="hint" id="viewing" hidden></p>
 		<h2>Estimated payout: <span class="total" id="total">$0.00</span></h2>
 		<div class="scroll">
 			<table>
@@ -113,13 +202,24 @@
 			</table>
 		</div>
 		<p class="hint">Regular and large containers are counted and weighed separately. Weights marked with * are estimated from typical empty-container weights; enter an actual weight for a more accurate by-weight value.</p>
-	</section>
+				<form class="save-row" id="save-form" hidden>
+					<input type="text" name="name" id="save-name" maxlength="100" required placeholder="Name this calculation, e.g. Saturday drop-off" aria-label="Calculation name">
+					<button type="submit">Save</button>
+					<span id="save-status" class="ok" role="status"></span>
+				</form>
+				<p class="hint" id="save-login-hint" hidden>Log in or create an account to save this calculation.</p>
+			</section>
 	<p class="error" id="error" role="alert"></p>
 </main>
 
 <script>
 	const $ = id => document.getElementById(id);
 	const money = v => '$' + Number(v).toFixed(2);
+	const inputCategory = {};
+	let accountsEnabled = false;
+	let currentUser = null;
+	// Form-encoded inputs behind the results on screen; null when there's nothing new to save.
+	let lastParams = null;
 
 	function cell(content) {
 		const td = document.createElement('td');
@@ -190,6 +290,7 @@
 				tr.appendChild(cell(numberInput(m.key + '_large', '1', m.name + ' large count')));
 				tr.appendChild(cell(numberInput(m.key + '_large_weight', '0.01', m.name + ' large weight in pounds')));
 				tr.appendChild(cell(numberInput(m.key + '_nonrefundable', '1', m.name + ' non-CRV count')));
+				for (const input of tr.querySelectorAll('input')) inputCategory[input.name] = c.key;
 				body.appendChild(tr);
 			}
 		}
@@ -226,7 +327,11 @@
 	});
 	$('change').addEventListener('click', () => showStep('choose'));
 
-	function showResults(data) {
+	function showResults(data, viewingText) {
+		$('viewing').hidden = !viewingText;
+		$('viewing').textContent = viewingText || '';
+		$('save-status').textContent = '';
+		updateSaveVisibility();
 		const body = $('results');
 		body.replaceChildren();
 		for (const r of data.results) {
@@ -276,6 +381,7 @@
 			});
 			const data = await res.json();
 			if (!res.ok) throw new Error(data.error || 'Request failed');
+			lastParams = params.toString();
 			showResults(data);
 		} catch (e) {
 			$('error').textContent = e.message;
@@ -285,9 +391,257 @@
 	$('form').addEventListener('reset', () => {
 		$('output').hidden = true;
 		$('error').textContent = '';
+		lastParams = null;
 	});
 
-	loadMaterials().catch(e => { $('error').textContent = e.message; });
+	// ---- Accounts and saved calculations ----
+
+	async function api(url, options) {
+		const res = await fetch(url, options);
+		const data = res.status === 204 ? {} : await res.json().catch(() => ({}));
+		if (res.status === 401 && currentUser) setUser(null);
+		if (!res.ok) throw new Error(data.error || 'Request failed (' + res.status + ')');
+		return data;
+	}
+
+	const formPost = body => ({
+		method: 'POST',
+		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+		body
+	});
+
+	function updateSaveVisibility() {
+		$('save-form').hidden = !(currentUser && lastParams !== null);
+		$('save-login-hint').hidden = !(accountsEnabled && !currentUser && lastParams !== null);
+	}
+
+	function setUser(name) {
+		currentUser = name;
+		$('account').hidden = !accountsEnabled;
+		$('whoami').textContent = name ? 'Signed in as ' + name : '';
+		$('show-login').hidden = !!name;
+		$('show-register').hidden = !!name;
+		$('logout').hidden = !name;
+		$('saved-panel').hidden = !name;
+		if (name) showPanel(null);
+		updateSaveVisibility();
+		if (name) loadSaved().catch(e => { $('error').textContent = e.message; });
+		else $('saved').replaceChildren();
+	}
+
+	async function refreshAccount() {
+		const data = await api('/api/me');
+		accountsEnabled = data.accountsEnabled;
+		setUser(data.username);
+	}
+
+	// The pending sign-up or login waiting for its emailed code.
+	let challenge = null;
+
+	// which: 'login', 'register', 'verify' or null to close all panels.
+	function showPanel(which) {
+		for (const kind of ['login', 'register', 'verify']) {
+			const open = kind === which;
+			$(kind + '-panel').hidden = !open;
+			$(kind + '-error').textContent = '';
+			if (open && kind !== 'verify') $(kind + '-form').elements.username.focus();
+		}
+		if (which !== 'verify') challenge = null;
+	}
+
+	$('show-login').addEventListener('click', () => showPanel('login'));
+	$('show-register').addEventListener('click', () => showPanel('register'));
+	$('to-login').addEventListener('click', e => { e.preventDefault(); showPanel('login'); });
+	$('to-register').addEventListener('click', e => { e.preventDefault(); showPanel('register'); });
+	document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => showPanel(null)));
+
+	function showChallenge(data) {
+		showPanel('verify');
+		challenge = data.challenge;
+		const needsEmail = !!data.needsEmail;
+		$('email-form').hidden = !needsEmail;
+		$('verify-form').hidden = needsEmail;
+		$('verify-sent').textContent = needsEmail ? '' : 'We sent a 6-digit code to ' + data.sentTo + '. It expires in 10 minutes.';
+		$('verify-form').reset();
+		(needsEmail ? $('email-form').elements.email : $('verify-form').elements.code).focus();
+	}
+
+	async function submitAccount(form, action, errorId, validate) {
+		$(errorId).textContent = '';
+		const problem = validate();
+		if (problem) {
+			$(errorId).textContent = problem;
+			return;
+		}
+		const body = new URLSearchParams();
+		body.set('username', form.elements.username.value);
+		body.set('password', form.elements.password.value);
+		if (form.elements.email) body.set('email', form.elements.email.value.trim());
+		try {
+			const data = await api('/api/' + action, formPost(body));
+			form.reset();
+			showChallenge(data);
+		} catch (e) {
+			$(errorId).textContent = e.message;
+		}
+	}
+
+	async function challengeRequest(url, fields) {
+		$('verify-error').textContent = '';
+		const body = new URLSearchParams(fields);
+		body.set('challenge', challenge);
+		try {
+			return await api(url, formPost(body));
+		} catch (e) {
+			$('verify-error').textContent = e.message;
+			return null;
+		}
+	}
+
+	$('email-form').addEventListener('submit', async event => {
+		event.preventDefault();
+		const form = event.target;
+		if (!form.checkValidity()) {
+			$('verify-error').textContent = 'Enter a valid email address.';
+			return;
+		}
+		const data = await challengeRequest('/api/verify/email', { email: form.elements.email.value.trim() });
+		if (data) {
+			form.reset();
+			showChallenge(data);
+		}
+	});
+
+	$('verify-form').addEventListener('submit', async event => {
+		event.preventDefault();
+		const form = event.target;
+		if (!form.checkValidity()) {
+			$('verify-error').textContent = 'Enter the 6-digit code from the email.';
+			return;
+		}
+		const data = await challengeRequest('/api/verify', { code: form.elements.code.value });
+		if (data) {
+			form.reset();
+			setUser(data.username);
+		}
+	});
+
+	$('resend-code').addEventListener('click', async e => {
+		e.preventDefault();
+		const data = await challengeRequest('/api/verify/resend', {});
+		if (data) {
+			showChallenge(data);
+			$('verify-sent').textContent = 'We sent a new code to ' + data.sentTo + '. Only the newest code works.';
+		}
+	});
+
+	$('login-form').addEventListener('submit', event => {
+		event.preventDefault();
+		const form = event.target;
+		submitAccount(form, 'login', 'login-error', () => form.checkValidity() ? null
+			: 'Enter your username and password.');
+	});
+
+	$('register-form').addEventListener('submit', event => {
+		event.preventDefault();
+		const form = event.target;
+		submitAccount(form, 'register', 'register-error', () => {
+			const f = form.elements;
+			if (!f.username.checkValidity()) return 'Usernames are 3-32 letters, digits, \'.\', \'_\' or \'-\'.';
+			if (!f.email.checkValidity()) return 'Enter a valid email address.';
+			if (!f.password.checkValidity()) return 'Passwords need 8-200 characters.';
+			if (f.password.value !== f.confirm.value) return 'The passwords don\'t match.';
+			return null;
+		});
+	});
+
+	$('logout').addEventListener('click', async () => {
+		try {
+			await api('/api/logout', { method: 'POST' });
+		} finally {
+			setUser(null);
+		}
+	});
+
+	function smallButton(text, className, onClick) {
+		const b = document.createElement('button');
+		b.type = 'button';
+		b.className = className;
+		b.textContent = text;
+		b.addEventListener('click', onClick);
+		return b;
+	}
+
+	async function loadSaved() {
+		const data = await api('/api/calculations');
+		const body = $('saved');
+		body.replaceChildren();
+		for (const s of data.calculations) {
+			const tr = document.createElement('tr');
+			tr.appendChild(cell(s.name));
+			tr.appendChild(cell(new Date(s.createdAt).toLocaleString()));
+			tr.appendChild(cell(money(s.total)));
+			const actions = cell('');
+			actions.className = 'buttons';
+			actions.append(
+				smallButton('Open', 'secondary', () => openSaved(s.id).catch(e => { $('error').textContent = e.message; })),
+				smallButton('Delete', 'danger', () => deleteSaved(s).catch(e => { $('error').textContent = e.message; })));
+			tr.appendChild(actions);
+			body.appendChild(tr);
+		}
+		if (data.calculations.length === 0) {
+			const tr = document.createElement('tr');
+			const td = cell('Nothing saved yet. Calculate a payout, then use Save below the results.');
+			td.colSpan = 4;
+			tr.appendChild(td);
+			body.appendChild(tr);
+		}
+	}
+
+	async function openSaved(id) {
+		const data = await api('/api/calculations/' + id);
+		const params = new URLSearchParams(data.inputs);
+		const categories = new Set([...params.keys()].map(k => inputCategory[k]).filter(Boolean));
+		for (const box of document.querySelectorAll('#choices input')) {
+			box.checked = categories.size === 0 || categories.has(box.value);
+		}
+		$('continue').disabled = false;
+		$('form').reset();
+		showStep('calc');
+		const fields = $('form').elements;
+		for (const [k, v] of params) if (fields[k]) fields[k].value = v;
+		showResults(data.result, 'Saved calculation "' + data.name + '" from ' + new Date(data.createdAt).toLocaleString());
+		$('output').scrollIntoView({ behavior: 'smooth' });
+	}
+
+	async function deleteSaved(s) {
+		if (!confirm('Delete "' + s.name + '"?')) return;
+		await api('/api/calculations/' + s.id, { method: 'DELETE' });
+		await loadSaved();
+	}
+
+	$('save-form').addEventListener('submit', async event => {
+		event.preventDefault();
+		const name = $('save-name').value.trim();
+		if (!name) {
+			$('save-status').textContent = '';
+			$('error').textContent = 'Give the calculation a name to save it.';
+			return;
+		}
+		$('error').textContent = '';
+		const body = new URLSearchParams(lastParams);
+		body.set('name', name);
+		try {
+			await api('/api/calculations', formPost(body));
+			$('save-name').value = '';
+			$('save-status').textContent = 'Saved.';
+			await loadSaved();
+		} catch (e) {
+			$('error').textContent = e.message;
+		}
+	});
+
+	loadMaterials().then(refreshAccount).catch(e => { $('error').textContent = e.message; });
 </script>
 </body>
 </html>
