@@ -25,9 +25,21 @@ CalRecycle changes its rates.
 
 ## Accounts and saved calculations
 
-Use **Create account** at the top of the page to sign up (you'll be asked to type your password twice), or **Log in** if you already have an account. Once you're signed in, a **Save** box appears under
+Use **Create account** at the top of the page to sign up (username, email, and your password typed twice), or **Log in** if you already have an account. Once you're signed in, a **Save** box appears under
 each result: give the calculation a name to store it. Your saved calculations are listed at the top of the page. **Open**
 restores the categories, the form and the results; **Delete** removes it. The calculator itself works without an account.
+
+### Two-step verification (email codes)
+
+Signing up and logging in both take two steps: after the password, the server emails a 6-digit code, and you type it
+in to finish. Codes expire after 10 minutes, and only the newest code works. **Send a new code** is available after
+30 seconds (up to 5 codes per attempt). Five wrong codes cancel the attempt; on login they also count toward the
+username lockout. Accounts created before email codes existed are asked to add an email address the next time they log in.
+
+To send real emails, copy `mail.properties.example` to `mail.properties` and fill in your SMTP settings (for Gmail,
+use an [app password](https://myaccount.google.com/apppasswords), not your normal password). `mail.properties` is
+ignored by git. Use `--mail-config <file>` to read it from somewhere else. **Without `mail.properties`, codes are
+printed in the server window instead of emailed**, which is handy for testing.
 
 - Everything is stored in a SQLite database file, `data/recycling.db` by default (change it with `--db <file>`). Back up
   that file to keep your history. It's ignored by git.
@@ -53,7 +65,7 @@ powershell -ExecutionPolicy Bypass -File .\run.ps1    # Windows
 ```
 
 Then open <http://127.0.0.1:8080/>. Options: `--port 9000`, `--host 0.0.0.0` (to allow other devices on your network),
-`--webroot <dir>`, `--db <file>`, `--no-db`.
+`--webroot <dir>`, `--db <file>`, `--no-db`, `--mail-config <file>`.
 
 Run the tests with `./run.sh test` or `.\run.ps1 test`. The first run needs internet access to download the SQLite driver.
 
@@ -64,7 +76,10 @@ Run the tests with `./run.sh test` or `.\run.ps1 test`. The first run needs inte
 | `GET /` | The calculator page |
 | `GET /api/materials` | Categories, materials, per-pound rates and estimated container weights |
 | `GET` or `POST /api/calculate` | Payout for a load |
-| `POST /api/register`, `POST /api/login` | Create an account or sign in (`username`, `password`); sets the session cookie |
+| `POST /api/register` | Start sign-up (`username`, `email`, `password`); emails a code and returns `{"challenge", "sentTo"}` |
+| `POST /api/login` | Start login (`username`, `password`); returns `{"challenge", "sentTo"}`, or `{"challenge", "needsEmail": true}` for accounts without an email |
+| `POST /api/verify` | Finish sign-up or login (`challenge`, `code`); sets the session cookie |
+| `POST /api/verify/resend`, `POST /api/verify/email` | Send a new code (`challenge`); add an email to an older account (`challenge`, `email`) |
 | `POST /api/logout`, `GET /api/me` | Sign out; check who is signed in and whether accounts are enabled |
 | `GET /api/calculations` | Your saved calculations, newest first |
 | `POST /api/calculations` | Save: `name` plus the same parameters as `/api/calculate` |
@@ -90,10 +105,12 @@ Newproj/src/com/recycleproj/
   BuybackCalculator.java    count/weight payout rules
   WebServer.java            HTTP server (JDK built-in com.sun.net.httpserver)
   Database.java             SQLite tables for users, sessions and saved calculations
-  AuthService.java          sign-up, login, sessions and lockout
+  AuthService.java          sign-up, login, email verification codes, sessions and lockout
+  Mailer.java, SmtpMailer.java   sending verification emails (SMTP, or printed to the console)
   PasswordHasher.java       salted PBKDF2 password hashes
   CalculationStore.java     save/list/open/delete calculations, per user
   Main.java                 entry point
 Newproj/test/               dependency-free tests
 BuybackCalculatorFrontend/src/main/webapp/MainPage.html   the web page
+mail.properties.example   template for email (SMTP) settings
 ```

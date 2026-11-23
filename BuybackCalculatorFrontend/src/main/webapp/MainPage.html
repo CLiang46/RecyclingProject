@@ -90,10 +90,11 @@
 			<h2>Create an account</h2>
 			<button type="button" class="secondary" data-close>Close</button>
 		</div>
-		<p class="hint">An account lets you save calculations and come back to them later. Usernames are 3-32 letters, digits, '.', '_' or '-'; passwords need at least 8 characters.</p>
+		<p class="hint">An account lets you save calculations and come back to them later. Usernames are 3-32 letters, digits, '.', '_' or '-'; passwords need at least 8 characters. We'll email you a code to confirm your address, and again each time you log in.</p>
 		<form id="register-form">
 			<div class="login-fields">
 				<label>Username <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_.\-]{3,32}"></label>
+				<label>Email <input type="email" name="email" autocomplete="email" required maxlength="254"></label>
 				<label>Password <input type="password" name="password" autocomplete="new-password" required minlength="8" maxlength="200"></label>
 				<label>Confirm password <input type="password" name="confirm" autocomplete="new-password" required minlength="8" maxlength="200"></label>
 				<button type="submit">Create account</button>
@@ -101,6 +102,29 @@
 		</form>
 		<p class="error" id="register-error" role="alert"></p>
 		<p class="hint">Already have an account? <a href="#" id="to-login">Log in</a>.</p>
+	</section>
+
+	<section id="verify-panel" hidden>
+		<div class="toolbar">
+			<h2>Check your email</h2>
+			<button type="button" class="secondary" data-close>Cancel</button>
+		</div>
+		<form id="email-form" hidden>
+			<p class="hint">Your account doesn't have an email address yet. Add one so we can send you a sign-in code.</p>
+			<div class="login-fields">
+				<label>Email <input type="email" name="email" autocomplete="email" required maxlength="254"></label>
+				<button type="submit">Send code</button>
+			</div>
+		</form>
+		<form id="verify-form">
+			<p class="hint" id="verify-sent"></p>
+			<div class="login-fields">
+				<label>Code <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" required pattern="\s*\d{6}\s*" maxlength="12"></label>
+				<button type="submit">Verify</button>
+			</div>
+			<p class="hint">Didn't get it? Check your spam folder or <a href="#" id="resend-code">send a new code</a>.</p>
+		</form>
+		<p class="error" id="verify-error" role="alert"></p>
 	</section>
 
 	<section id="saved-panel" hidden>
@@ -411,14 +435,18 @@
 		setUser(data.username);
 	}
 
-	// which: 'login', 'register' or null to close both panels.
+	// The pending sign-up or login waiting for its emailed code.
+	let challenge = null;
+
+	// which: 'login', 'register', 'verify' or null to close all panels.
 	function showPanel(which) {
-		for (const kind of ['login', 'register']) {
+		for (const kind of ['login', 'register', 'verify']) {
 			const open = kind === which;
 			$(kind + '-panel').hidden = !open;
 			$(kind + '-error').textContent = '';
-			if (open) $(kind + '-form').elements.username.focus();
+			if (open && kind !== 'verify') $(kind + '-form').elements.username.focus();
 		}
+		if (which !== 'verify') challenge = null;
 	}
 
 	$('show-login').addEventListener('click', () => showPanel('login'));
@@ -426,6 +454,17 @@
 	$('to-login').addEventListener('click', e => { e.preventDefault(); showPanel('login'); });
 	$('to-register').addEventListener('click', e => { e.preventDefault(); showPanel('register'); });
 	document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => showPanel(null)));
+
+	function showChallenge(data) {
+		showPanel('verify');
+		challenge = data.challenge;
+		const needsEmail = !!data.needsEmail;
+		$('email-form').hidden = !needsEmail;
+		$('verify-form').hidden = needsEmail;
+		$('verify-sent').textContent = needsEmail ? '' : 'We sent a 6-digit code to ' + data.sentTo + '. It expires in 10 minutes.';
+		$('verify-form').reset();
+		(needsEmail ? $('email-form').elements.email : $('verify-form').elements.code).focus();
+	}
 
 	async function submitAccount(form, action, errorId, validate) {
 		$(errorId).textContent = '';
@@ -437,14 +476,64 @@
 		const body = new URLSearchParams();
 		body.set('username', form.elements.username.value);
 		body.set('password', form.elements.password.value);
+		if (form.elements.email) body.set('email', form.elements.email.value.trim());
 		try {
 			const data = await api('/api/' + action, formPost(body));
 			form.reset();
-			setUser(data.username);
+			showChallenge(data);
 		} catch (e) {
 			$(errorId).textContent = e.message;
 		}
 	}
+
+	async function challengeRequest(url, fields) {
+		$('verify-error').textContent = '';
+		const body = new URLSearchParams(fields);
+		body.set('challenge', challenge);
+		try {
+			return await api(url, formPost(body));
+		} catch (e) {
+			$('verify-error').textContent = e.message;
+			return null;
+		}
+	}
+
+	$('email-form').addEventListener('submit', async event => {
+		event.preventDefault();
+		const form = event.target;
+		if (!form.checkValidity()) {
+			$('verify-error').textContent = 'Enter a valid email address.';
+			return;
+		}
+		const data = await challengeRequest('/api/verify/email', { email: form.elements.email.value.trim() });
+		if (data) {
+			form.reset();
+			showChallenge(data);
+		}
+	});
+
+	$('verify-form').addEventListener('submit', async event => {
+		event.preventDefault();
+		const form = event.target;
+		if (!form.checkValidity()) {
+			$('verify-error').textContent = 'Enter the 6-digit code from the email.';
+			return;
+		}
+		const data = await challengeRequest('/api/verify', { code: form.elements.code.value });
+		if (data) {
+			form.reset();
+			setUser(data.username);
+		}
+	});
+
+	$('resend-code').addEventListener('click', async e => {
+		e.preventDefault();
+		const data = await challengeRequest('/api/verify/resend', {});
+		if (data) {
+			showChallenge(data);
+			$('verify-sent').textContent = 'We sent a new code to ' + data.sentTo + '. Only the newest code works.';
+		}
+	});
 
 	$('login-form').addEventListener('submit', event => {
 		event.preventDefault();
@@ -459,6 +548,7 @@
 		submitAccount(form, 'register', 'register-error', () => {
 			const f = form.elements;
 			if (!f.username.checkValidity()) return 'Usernames are 3-32 letters, digits, \'.\', \'_\' or \'-\'.';
+			if (!f.email.checkValidity()) return 'Enter a valid email address.';
 			if (!f.password.checkValidity()) return 'Passwords need 8-200 characters.';
 			if (f.password.value !== f.confirm.value) return 'The passwords don\'t match.';
 			return null;

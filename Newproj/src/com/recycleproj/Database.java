@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -38,7 +39,12 @@ public class Database implements AutoCloseable {
 					+ "id INTEGER PRIMARY KEY AUTOINCREMENT,"
 					+ "username TEXT NOT NULL UNIQUE COLLATE NOCASE,"
 					+ "password_hash TEXT NOT NULL,"
-					+ "created_at TEXT NOT NULL)");
+					+ "created_at TEXT NOT NULL,"
+					+ "email TEXT)");
+			if (!hasColumn(s, "users", "email")) {
+				// Databases created before two-factor login; those users add an address at their next login.
+				s.execute("ALTER TABLE users ADD COLUMN email TEXT");
+			}
 			s.execute("CREATE TABLE IF NOT EXISTS sessions ("
 					+ "token_hash TEXT PRIMARY KEY,"
 					+ "user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
@@ -53,6 +59,17 @@ public class Database implements AutoCloseable {
 					+ "total REAL NOT NULL)");
 			s.execute("CREATE INDEX IF NOT EXISTS calculations_by_user ON calculations(user_id, id)");
 		}
+	}
+
+	private static boolean hasColumn(Statement s, String table, String column) throws SQLException {
+		try (ResultSet rs = s.executeQuery("PRAGMA table_info(" + table + ")")) {
+			while (rs.next()) {
+				if (rs.getString("name").equalsIgnoreCase(column)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	Connection connection() {

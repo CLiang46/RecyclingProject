@@ -29,8 +29,14 @@ import java.util.concurrent.Executors;
  *        {key}_regular, {key}_large, {key}_nonrefundable (counts),
  *        {key}_regular_weight, {key}_large_weight (pounds, optional)
  *
- * Accounts (only when started with a database):
- * POST /api/register, /api/login (username, password), /api/logout; GET /api/me
+ * Accounts (only when started with a database). Signing up and logging in each take two steps; the first emails a
+ * 6-digit code and returns {"challenge": id, "sentTo": masked address}:
+ * POST /api/register (username, email, password) and POST /api/login (username, password)
+ *        -> challenge; for older accounts without an email, login returns {"challenge", "needsEmail": true}
+ * POST /api/verify (challenge, code)          -> sets the session cookie, returns {"username"}
+ * POST /api/verify/resend (challenge)         -> emails a new code
+ * POST /api/verify/email (challenge, email)   -> older accounts: set the address and email a code to it
+ * POST /api/logout; GET /api/me
  * GET  /api/calculations            -> the logged-in user's saved calculations
  * POST /api/calculations            -> save: name plus the same parameters as /api/calculate
  * GET|DELETE /api/calculations/{id} -> open or delete one saved calculation
@@ -50,12 +56,16 @@ public class WebServer {
 	private final CalculationStore store;
 
 	public WebServer(String host, int port, Path webRoot) throws IOException {
-		this(host, port, webRoot, (Database) null);
+		this(host, port, webRoot, (AuthService) null, (CalculationStore) null);
 	}
 
-	/** @param db database for accounts and saved calculations, or null to run the calculator only */
-	public WebServer(String host, int port, Path webRoot, Database db) throws IOException {
-		this(host, port, webRoot, db == null ? null : new AuthService(db), db == null ? null : new CalculationStore(db));
+	/**
+	 * @param db     database for accounts and saved calculations, or null to run the calculator only
+	 * @param mailer sends sign-up and login verification codes
+	 */
+	public WebServer(String host, int port, Path webRoot, Database db, Mailer mailer) throws IOException {
+		this(host, port, webRoot, db == null ? null : new AuthService(db, mailer),
+				db == null ? null : new CalculationStore(db));
 	}
 
 	WebServer(String host, int port, Path webRoot, AuthService auth, CalculationStore store) throws IOException {
@@ -73,6 +83,9 @@ public class WebServer {
 		server.createContext("/api/me", ex -> handleAccount(ex, this::me));
 		server.createContext("/api/register", ex -> handleAccount(ex, this::register));
 		server.createContext("/api/login", ex -> handleAccount(ex, this::login));
+		server.createContext("/api/verify", ex -> handleAccount(ex, this::verify));
+		server.createContext("/api/verify/resend", ex -> handleAccount(ex, this::resend));
+		server.createContext("/api/verify/email", ex -> handleAccount(ex, this::addEmail));
 		server.createContext("/api/logout", ex -> handleAccount(ex, this::logout));
 		server.createContext("/api/calculations", ex -> handleAccount(ex, this::calculations));
 		// Password hashing is deliberately slow, so one login shouldn't block every other request.
@@ -240,15 +253,35 @@ public class WebServer {
 	private void register(HttpExchange ex) throws IOException, SQLException, HttpError, AuthService.AuthException {
 		requireMethod(ex, "POST");
 		Map<String, String> form = parseParams(readForm(ex));
-		AuthService.User user = auth.register(form.get("username"), form.get("password"));
-		startSession(ex, user, 201);
+		sendChallenge(ex, auth.startRegistration(form.get("username"), form.get("email"), form.get("password")));
 	}
 
 	private void login(HttpExchange ex) throws IOException, SQLException, HttpError, AuthService.AuthException {
 		requireMethod(ex, "POST");
 		Map<String, String> form = parseParams(readForm(ex));
-		AuthService.User user = auth.login(form.get("username"), form.get("password"));
-		startSession(ex, user, 200);
+		sendChallenge(ex, auth.startLogin(form.get("username"), form.get("password")));
+	}
+
+	private void verify(HttpExchange ex) throws IOException, SQLException, HttpError, AuthService.AuthException {
+		requireMethod(ex, "POST");
+		Map<String, String> form = parseParams(readForm(ex));
+		startSession(ex, auth.verify(form.get("challenge"), form.get("code")), 200);
+	}
+
+	private void resend(HttpExchange ex) throws IOException, HttpError, AuthService.AuthException {
+		requireMethod(ex, "POST");
+		sendChallenge(ex, auth.resend(parseParams(readForm(ex)).get("challenge")));
+	}
+
+	private void addEmail(HttpExchange ex) throws IOException, HttpError, AuthService.AuthException {
+		requireMethod(ex, "POST");
+		Map<String, String> form = parseParams(readForm(ex));
+		sendChallenge(ex, auth.addEmail(form.get("challenge"), form.get("email")));
+	}
+
+	private static void sendChallenge(HttpExchange ex, AuthService.Challenge c) throws IOException {
+		sendJson(ex, 200, "{\"challenge\":" + quote(c.id) + (c.sentTo == null ? ",\"needsEmail\":true"
+				: ",\"sentTo\":" + quote(c.sentTo)) + "}");
 	}
 
 	private void startSession(HttpExchange ex, AuthService.User user, int status) throws IOException, SQLException {
